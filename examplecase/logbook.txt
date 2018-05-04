@@ -1,0 +1,7 @@
+scan nr.	info
+45	FeO elastic 7060eV 200s
+48	FeO elastic 7090eV 200s
+49	FeO elastic 7030eV 200s
+50	FeO elastic 7000eV 200s
+62	Fe-foil 7300eV 500s
+63	Fe-foil 7300eV 500s
