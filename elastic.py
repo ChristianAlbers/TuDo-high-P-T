@@ -22,7 +22,6 @@ def load(path, elasticnumber, energystart, energystep, rois):
     elasticmax = dict()
     for roiscount in (range(0,len(rois))):
         elasticmax[roiscount]=[]
-    i=0
     xpos = np.linspace(1, 487, 487)
     data = np.zeros((195, 487))
     crystall = np.zeros((len(rois),) + (487,))
@@ -30,23 +29,28 @@ def load(path, elasticnumber, energystart, energystep, rois):
     crystall_WBCK  = np.zeros(np.shape(crystall))
     spect=spectrum()
     T = "Scan" +("%05d" % elasticnumber)
-    for file in glob.glob(path +  ("%05d" % elasticnumber) + "/pilatus_100k/alignment_" + "*.tif")[:int(5):int(1)]: 
+    i=0 
+    for file in glob.glob(path +  ("%05d" % elasticnumber) + "/pilatus_100k/alignment_" + "*.tif")[::int(1)]: 
         pilatusimages = Image.open(file)
-        data = np.array(pilatusimages) 
+        data = np.array(pilatusimages)
+
         #data[46][18] = 3   #correct dead pixel to bgr value, only BL9 DELTA Pilatus 100K s specific
         for (x1,x2),roiscount in zip(rois,range(0,len(rois))):
             crystall[roiscount] = np.array(np.sum(data[x1:x2], axis = 0))/(len(data[x1:x2]))
             p=spectrum(xpos[np.argmax(crystall[roiscount])-10:np.argmax(crystall[roiscount])+10:1], crystall[roiscount][np.argmax(crystall[roiscount])-10:np.argmax(crystall[roiscount])+10:1]).gauss(fullinfo=1)
             elasticmax[roiscount].append([p.cms(),energystart+i*energystep,np.abs(p.fit_p[2]*2*np.sqrt(2*np.log(2)))])
         i+=1
-    for c in (range(0,i)):
+        print(i)
+    for c in (range(0,roiscount+1)):
+        print(np.array(elasticmax[c]))
         params[c]=fwhm.fit2(np.array(elasticmax[c])[:,0],np.array(elasticmax[c])[:,1],lin)
         t[c]=sum(np.array(elasticmax[c])[:,2])/len(np.array(elasticmax[c])[:,2])
         #params[c][0].append(p)
     #print("Summe")
     #print(t)
         #params[c].append()
-    #print(params)
+    print(params)
+    print(t)
     out=[]
     for key in params:
         out.append([params[key][0][0], params[key][0][1],t[key]])
