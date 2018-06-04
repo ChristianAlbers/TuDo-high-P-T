@@ -60,7 +60,7 @@ for x in range(0,len(scannumbers)):
 		crystall_WBCK  = np.zeros(np.shape(crystall))
 		spect=spectrum()
 		T = "Scan" +("%05d" % number)
-		for file in glob.glob(path2spectra +  ("%05d" % number) + "/pilatus_100k/alignment_" + "*.tif")[:int(121):int(1)]: 
+		for file in glob.glob(path2spectra +  ("%05d" % number) + "/pilatus_100k/alignment_" + "*.tif")[::int(1)]: 
 			pilatusimages = Image.open(file)
 			data = np.array(pilatusimages)	
 			#data[46][18] = 3	#correct dead pixel to bgr value, only BL9 DELTA Pilatus 100K s specific
