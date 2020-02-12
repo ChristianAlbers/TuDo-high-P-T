@@ -796,7 +796,3 @@ curdoc().title = "XES_elastics"
 
 
 roots=curdoc().roots
-
-add_elastic()
-set_auto_rois()
-add_spectrum()
