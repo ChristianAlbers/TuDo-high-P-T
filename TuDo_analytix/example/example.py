@@ -42,6 +42,7 @@ test_spect.check_all_images(roiwidth=5, bgrwidth=3)
 iad_ref=test_spect.calc_IAD(test_ref.spectrum)
 print(test_spect.calc_M1())
 print(test_ref.calc_M1())
+#analyse spectra by IAD and M1 analysis
 
 plt.figure()
 plt.plot(test_spect.spectrum.x,test_spect.spectrum.y,color="C0")
