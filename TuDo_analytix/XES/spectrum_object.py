@@ -30,8 +30,10 @@ class XES_object:
 			self.load_images(images)
 			self.sum_images()
 		self.spectrum = spectrum() #spectrum of all summed images
+		self.spectrum_raw = spectrum() #raw spectrumfor all crystals
 		self.spectrum_temp = spectrum() #temporarily spectrum for fits
 		self.spect_by_image= dict() #single spectra for all images
+		self.bgr_raw = spectrum
 		self.bgr_by_image= dict() #background for all images
 		self.params = elastic.params #parameters for calibration of detectorimages
 		self.crys_number=crys_number #number of crystals used
@@ -40,6 +42,7 @@ class XES_object:
 		self.references = dict() #reference spectra
 		self.references_temp = dict() #reference spectra only for fitting
 		self.fit_refs=0 #marks the references used for fitting
+		self.snr=0 #signal to noise ratio
 
 	def load_images(self,
 					images):
@@ -233,6 +236,7 @@ class XES_object:
 		crystals=np.zeros((len(self.rois),data.shape[1]))
 		bgrs=np.zeros((len(self.rois),data.shape[1]))
 		spect=spectrum()
+		bgr_raw=spectrum()
 		#error=np.zeros(self.mask.shape[1])
 		for r, roi in enumerate(self.rois):
 			crystals[r]=np.array(np.sum(data[roi[0]:roi[1]+1], axis = 0))
@@ -273,6 +277,7 @@ class XES_object:
 		#self.spectrum=spectrum(np.linspace(7020,7120,1001),np.interp(np.linspace(7020,7120,1001),spect(7020,7120).x,spect(7020,7120).n().y))
 		self.x=spect.x
 		self.y=spect.y
+		self.background=spect.background
 		self.error=spect.error
 		self.spectrum=spect
 	"""
@@ -371,10 +376,11 @@ class XES_object:
 		self.spectrum=spect
 	"""
 
-	def calc_spectrum_all_new(self, bgrfit=10,bgrsmooth=0, show=False):
+	def calc_spectrum_all_new(self, bgrwidth=3, bgrfit=10,bgrsmooth=0, show=False):
 		data = self.det_image
 		xpos=np.linspace(0,self.mask.shape[1]-1,self.mask.shape[1])
 		params=self.params
+		total_spect=spectrum()
 		if type(bgrfit) != int:
 			bgrfit=10
 			print("please give bgrfit = int, took bgrfit = 10")
@@ -384,85 +390,29 @@ class XES_object:
 		for file in self.det_images:
 			file=os.path.normpath(file)
 			img=fabio.open(file).data
-			#print("hier")
-			#print(file)
 			spect=spectrum()
-			crystals=np.zeros((4,self.mask.shape[1]))
-			bgrs=np.zeros((4,self.mask.shape[1]))
 			for r, roi in enumerate(self.rois):
-				crystals[r]=np.array(np.sum(img[roi[0]:roi[1]+1], axis = 0))
-				#error+=crystals[r]**2
-				bgrs[r]=np.array(np.sum(img[roi[1]+1:roi[1]+1+(roi[1]-roi[0])], axis = 0))
-				#bgrs[r]=bgrs[r]*(1/np.sum(bgrs[r][bgr_range[0]:bgr_range[1]])*np.sum(crystals[r][bgr_range[0]:bgr_range[1]]))
-				if bgrfit:
-					#bgrs[r]=spectrum(xpos,bgrs[r]).pfit(bgrfit).y
-					bgrs[r]=spectrum(xpos,bgrs[r]).bg([(xpos[10],xpos[-10])],bgrfit).y
+				roiwidth=roi[1]-roi[0]
+				crystal_raw=np.array(np.sum(img[roi[0]:roi[1]], axis = 0))
+				background_raw=np.array(np.sum(img[roi[1]:roi[1]+bgrwidth], axis = 0)+np.sum(img[roi[0]-bgrwidth:roi[0]], axis = 0))*roiwidth/bgrwidth/2
+				if bgrsmooth:
+					background=spectrum(xpos,background_raw).b2(bgrsmooth).y
+				elif bgrfit:
+					background=spectrum(xpos,background_raw).bg([(xpos[10],xpos[-10])],bgrfit).y
+				# if both values are given: bgrsmooth has a higher priority
 				if params[r,0] < 0:
-					crystal=spectrum(xpos*params[r,0]+params[r,1],crystals[r]-bgrs[r],bgrs[r]).reverse()
-					crystal.error=np.sqrt(crystals[r][::-1])
+					crystal=spectrum(xpos*params[r,0]+params[r,1],crystal_raw-background,error=np.sqrt(crystal_raw),background=background_raw).reverse()
 				else:
-					crystal=spectrum(xpos*params[r,0]+params[r,1],crystals[r]-bgrs[r],bgrs[r])
-					crystal.error=np.sqrt(crystals[r])
-					#plt.legend()
+					crystal=spectrum(xpos*params[r,0]+params[r,1],crystal_raw-background,error=np.sqrt(crystal_raw),background=background_raw)
 				spect+=crystal
-				#spect.error=np.sqrt(spect.error**2+error)
 			self.spect_by_image[file]=spect
-		crystals=np.zeros((4,data.shape[1]))
-		bgrs=np.zeros((4,data.shape[1]))
-		spect=spectrum()
-		#error=np.zeros(self.mask.shape[1])
-		for r, roi in enumerate(self.rois):
-			crystals[r]=np.array(np.sum(data[roi[0]:roi[1]+1], axis = 0))
-			bgrs[r]=np.array(np.sum(data[roi[0]-bgrwidth-bgr_skip:roi[0]-bgr_skip], axis = 0))+np.array(np.sum(data[roi[1]+bgr_skip:roi[1]+bgrwidth+bgr_skip], axis = 0))
-			bgrs[r]=bgrs[r]*(1/np.sum(bgrs[r][bgr_range[0]:bgr_range[1]])*np.sum(crystals[r][bgr_range[0]:bgr_range[1]]))
-			#error+=crystals[r]**2
-			if bgrfit:
-				bgrs[r]=spectrum(xpos,bgrs[r]).bg([(xpos[10],xpos[-10])],bgrfit).y
-			if bgrsmooth:
-				#extend=50
-				#xpos_temp=xpos
-				#bgr_temp=bgrs[r]
-				#for i in range(extend):
-				#	xpos_temp=np.append(xpos_temp,[xpos_temp[-1]+1])
-				#	bgr_temp=np.append(bgr_temp,[bgr_temp[-2]])
-				#bgrs[r]=spectrum(xpos_temp,bgr_temp).b(bgrsmooth).y[:-extend]
-				bgrs[r]=spectrum(xpos,bgrs[r]).b(bgrsmooth).y
-			if params[r,0] < 0:
-				crystal=spectrum(xpos*params[r,0]+params[r,1],crystals[r]-bgrs[r],bgrs[r]).reverse()
-				crystal.error=np.sqrt(crystals[r][::-1])
-			else:
-				crystal=spectrum(xpos*params[r,0]+params[r,1],crystals[r]-bgrs[r],bgrs[r])
-				crystal.error=np.sqrt(crystals[r])
-			if show:
-				plt.figure(fig+1)
-				#plt.plot(xpos,crystals[r],label=r)
-				plt.errorbar(xpos,crystals[r],np.sqrt(crystals[r]),label=r)
-				plt.plot(xpos,bgrs[r],label=r)
-				plt.legend()
-
-				plt.figure(fig+2)
-				#(crystal/crystal.max()).p(newlabel=r)
-				plt.errorbar(crystal.x,crystal.y/crystal.max(),crystal.error/crystal.max(),label=r)
-				#(crystal/crystal.max()).p(newlabel=r)
-				plt.legend()
-
-				plt.figure(fig+3)
-				#(crystal/crystal.max()).p(newlabel=r)
-				#plt.errorbar(crystal.x,crystal.y/crystal.max(),crystal.error/crystal.max(),label=r)
-				crystal_temp=spectrum(crystal.x,crystal.y)
-				maximum=crystal_temp.x[np.argmax(crystal_temp.y)]
-				print(maximum)
-				crystal_temp.x=crystal_temp.x-crystal_temp(maximum-2,maximum+2).gauss().cms()+7055
-				plt.plot(crystal_temp.x,crystal_temp.y/crystal_temp.max(),label=r)
-				#(crystal/crystal.max()).p(newlabel=r)
-				plt.legend()
-			spect+=crystal
-		#spect.error=np.sqrt(spect.error**2+error)
-		#self.spectrum=spectrum(np.linspace(7020,7120,1001),np.interp(np.linspace(7020,7120,1001),spect(7020,7120).x,spect(7020,7120).n().y))
-		self.x=spect.x
-		self.y=spect.y
-		self.error=spect.error
-		self.spectrum=spect
+			total_spect+=spect
+		self.spectrum=total_spect
+		#self.x=spect.x
+		#self.y=spect.y
+		#self.background=spect.background
+		#self.error=spect.error
+		#self.spectrum=spect
 
 
 	def check_all_images(self, roiwidth=5, bgrwidth=3,skip=1):
@@ -770,12 +720,12 @@ class XES_object:
 
 
 	def calc_IAD(self,ref,iad_range=(7030,7070)):
-		spec_IAD=self.spectrum
+		spec_IAD=self.spectrum.n(iad_range[0],iad_range[1])
 		new_x=np.linspace(spec_IAD.x[0],spec_IAD.x[-1],1001)
 		new_y=scipy.interpolate.interp1d(spec_IAD.x,spec_IAD.y,"quadratic")(np.linspace(spec_IAD.x[0],spec_IAD.x[-1],1001))	
 		spec_IAD=spectrum(new_x,new_y)
 
-		ref_IAD=ref
+		ref_IAD=ref.n(iad_range[0],iad_range[1])
 		new_x=np.linspace(ref_IAD.x[0],ref_IAD.x[-1],1001)
 		new_y=scipy.interpolate.interp1d(ref_IAD.x,ref_IAD.y,"quadratic")(np.linspace(ref_IAD.x[0],ref_IAD.x[-1],1001))	
 		ref_IAD=spectrum(new_x,new_y)
@@ -800,3 +750,14 @@ class XES_object:
 		fm_limits[1]=spec_FM.x[k]
 		value_FM=spec_FM(fm_limits[0],fm_limits[1]).cms()
 		return np.round(value_FM,2)
+
+	def calc_SNR(self,evaluate=True,threshold = 100):
+		snr=(self.spectrum.y/np.sqrt(self.spectrum.background))
+		self.snr=snr
+		snr_max=np.round(np.max(snr),2)
+		if evaluate:
+			if snr_max >= threshold:
+				print("data quality sufficient")
+			else:
+				print("data quality not sufficient, keep counting")
+		return snr_max
