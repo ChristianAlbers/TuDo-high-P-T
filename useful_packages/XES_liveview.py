@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import TuDo_analytix_dev.XES as XES
+import TuDo_analytix.XES as XES
 import glob
 import fabio
 from spect import *
